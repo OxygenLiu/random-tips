@@ -18,9 +18,7 @@ This happens when you're behind a VPN, proxy, or datacenter IP — which is comm
 
 The real paper URL is embedded in the `url` parameter. We can extract it and skip Google Scholar entirely.
 
-Three approaches, from most to least automated:
-
-### 1. Clipboard Watcher (Linux — fully automatic)
+### Clipboard Watcher (Linux — fully automatic)
 
 A background service that monitors your clipboard. Copy a Scholar link, and the paper opens automatically in your browser.
 
@@ -74,7 +72,7 @@ systemctl --user enable --now scholar-watch
 
 > **Note**: If your `DISPLAY` is different (e.g., Wayland), check with `echo $DISPLAY` and update the service file. For Wayland, replace `xclip` with `wl-copy`/`wl-paste` from `wl-clipboard`.
 
-### 2. Shell Function (CLI)
+### Shell Function (CLI)
 
 Add to your `~/.bashrc` or `~/.zshrc`:
 
@@ -91,16 +89,6 @@ Usage (wrap URL in single quotes to avoid shell `&` interpretation):
 ```bash
 scholar 'https://scholar.google.com/scholar_url?url=https://example.com/paper.pdf&hl=en&...'
 ```
-
-### 3. Browser Bookmarklet
-
-Create a bookmark with this URL — click it on any page to rewrite all Scholar redirect links in place:
-
-```javascript
-javascript:document.querySelectorAll('a[href*="scholar.google.com/scholar_url"]').forEach(a=>{let m=a.href.match(/url=([^&]+)/);if(m)a.href=decodeURIComponent(m[1])});void(0)
-```
-
-> **Note**: This may not work in email clients that render content in iframes or shadow DOM (e.g., Protonmail). Use the clipboard watcher instead.
 
 ## Why Not Just Proxy Google Scholar?
 
