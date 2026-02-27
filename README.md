@@ -6,7 +6,3 @@ A collection of practical tips for Linux, networking, and development — soluti
 
 ### Networking
 - [Bypass Google Scholar Redirect Blocking](google-scholar-bypass.md) — Auto-open papers from Scholar alert emails without touching Google's blocked servers
-
-## Contributing
-
-Found these useful? Have your own tips? PRs welcome.
