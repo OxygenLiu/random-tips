@@ -6,6 +6,8 @@ I use a proxy on my iPhone daily in China — both for accessing international s
 
 This is purely my personal experience. No offense to any other apps — they're all great projects. But for my specific use case (split routing in China), sing-box has been flawless.
 
+> **Side note**: sing-box actually runs on *every* device in my setup — iPhone (client), Linux laptop (TUN client), Debian home server (TUN proxy router for LAN), and Tokyo VPS (proxy server). One unified platform, one config format, across all devices. That consistency is a huge advantage over juggling different software on each device.
+
 ## The Problems I Had with Other Apps
 
 With other popular iOS proxy apps, I consistently ran into:
