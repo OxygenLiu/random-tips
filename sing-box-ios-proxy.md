@@ -36,38 +36,16 @@ The sing-box iOS app supports importing JSON configs directly. Here's my working
 
 ```json
 {
-  "log": {
-    "level": "info",
-    "timestamp": true
-  },
+  "log": { "level": "info", "timestamp": true },
   "dns": {
     "servers": [
-      {
-        "tag": "cloudflare",
-        "address": "tcp://1.1.1.1",
-        "detour": "proxy"
-      },
-      {
-        "tag": "alidns-doh",
-        "address": "https://dns.alidns.com/dns-query",
-        "address_resolver": "local",
-        "detour": "direct"
-      },
-      {
-        "tag": "local",
-        "address": "119.29.29.29",
-        "detour": "direct"
-      }
+      { "tag": "cloudflare", "address": "https://1.1.1.1/dns-query", "detour": "proxy" },
+      { "tag": "alidns", "address": "https://dns.alidns.com/dns-query", "address_resolver": "local", "detour": "direct" },
+      { "tag": "local", "address": "119.29.29.29", "detour": "direct" }
     ],
     "rules": [
-      {
-        "outbound": "any",
-        "server": "local"
-      },
-      {
-        "rule_set": "geosite-cn",
-        "server": "local"
-      }
+      { "outbound": "any", "server": "local" },
+      { "rule_set": "geosite-cn", "server": "local" }
     ],
     "final": "cloudflare",
     "independent_cache": true
@@ -76,9 +54,7 @@ The sing-box iOS app supports importing JSON configs directly. Here's my working
     {
       "type": "tun",
       "tag": "tun-in",
-      "interface_name": "tun0",
       "address": ["198.18.0.1/16"],
-      "mtu": 1500,
       "auto_route": true,
       "stack": "gvisor",
       "sniff": true,
@@ -91,8 +67,9 @@ The sing-box iOS app supports importing JSON configs directly. Here's my working
       "tag": "proxy",
       "outbounds": ["your-proxy-1", "your-proxy-2"],
       "url": "https://www.gstatic.com/generate_204",
-      "interval": "3m",
-      "tolerance": 50
+      "interval": "1m",
+      "tolerance": 50,
+      "interrupt_exist_connections": true
     },
     {
       "type": "vless",
@@ -104,74 +81,38 @@ The sing-box iOS app supports importing JSON configs directly. Here's my working
       "tls": {
         "enabled": true,
         "server_name": "www.microsoft.com",
-        "utls": {
-          "enabled": true,
-          "fingerprint": "chrome"
-        },
-        "reality": {
-          "enabled": true,
-          "public_key": "YOUR_PUBLIC_KEY",
-          "short_id": "YOUR_SHORT_ID"
-        }
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": { "enabled": true, "public_key": "YOUR_PUBLIC_KEY", "short_id": "YOUR_SHORT_ID" }
       }
     },
-    {
-      "type": "direct",
-      "tag": "direct"
-    }
+    { "type": "direct", "tag": "direct" }
   ],
   "route": {
     "rules": [
-      {
-        "protocol": "dns",
-        "action": "hijack-dns"
-      },
-      {
-        "ip_is_private": true,
-        "outbound": "direct"
-      },
-      {
-        "rule_set": "geoip-cn",
-        "outbound": "direct"
-      },
-      {
-        "rule_set": "geosite-cn",
-        "outbound": "direct"
-      }
+      { "protocol": "dns", "action": "hijack-dns" },
+      { "ip_is_private": true, "outbound": "direct" },
+      { "rule_set": "geoip-cn", "outbound": "direct" },
+      { "rule_set": "geosite-cn", "outbound": "direct" }
     ],
     "rule_set": [
-      {
-        "tag": "geoip-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-        "download_detour": "proxy"
-      },
-      {
-        "tag": "geosite-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-        "download_detour": "proxy"
-      }
+      { "tag": "geoip-cn", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs", "download_detour": "proxy" },
+      { "tag": "geosite-cn", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs", "download_detour": "proxy" }
     ],
     "final": "proxy",
     "auto_detect_interface": true
   },
-  "experimental": {
-    "cache_file": {
-      "enabled": true
-    }
-  }
+  "experimental": { "cache_file": { "enabled": true } }
 }
 ```
 
 ### Key design decisions
 
-- **DNS**: Domestic domains → AliDNS (119.29.29.29, direct). Everything else → Cloudflare (1.1.1.1, via proxy). `independent_cache: true` prevents cache pollution between the two.
+- **DNS**: Domestic domains → AliDNS DoH (direct). Everything else → Cloudflare DoH (via proxy). Must use DoH (`https://`), not raw TCP — raw TCP DNS breaks through WebSocket-based outbounds like Cloudflare Workers. The `detour: "proxy"` is critical — without it, DoH goes direct and gets blocked in China. `independent_cache` prevents cross-contamination.
 - **Routing**: GeoIP-CN and GeoSite-CN → direct. Private IPs → direct. Everything else → proxy via `urltest` auto-selection.
 - **Sniffing**: `sniff: true` + `sniff_override_destination: true` on the TUN inbound — this is critical for correct routing when DNS returns unexpected IPs.
-- **urltest**: Automatically picks the lowest-latency proxy from your list. Add multiple outbounds for failover.
+- **urltest**: `interrupt_exist_connections: true` immediately switches traffic when a better outbound is found. Without it, a dead outbound blocks all traffic until the next health check.
+
+> For more gotchas, see [sing-box Lessons Learned in China](sing-box-lessons-learned.md) — covers `strict_route` pitfalls, suspend/resume fixes, safe proxy migration, and more.
 
 ## How to Set Up
 

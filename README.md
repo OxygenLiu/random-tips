@@ -8,3 +8,4 @@ A collection of practical tips for Linux, networking, and development — soluti
 - [Bypass Google Scholar Redirect Blocking](google-scholar-bypass.md) — Auto-open papers from Scholar alert emails without touching Google's blocked servers
 - [Why I Switched to sing-box on iOS](sing-box-ios-proxy.md) — Flawless split routing in China after frustrating experiences with other proxy apps
 - [Free Cloudflare Workers Proxy That Actually Performs](cloudflare-edgetunnel-free-proxy.md) — 3.5 MB/s from a free Worker, fully automated with GitHub Actions
+- [sing-box Lessons Learned in China](sing-box-lessons-learned.md) — DNS pitfalls, urltest failover, strict_route traps, and suspend/resume fixes
