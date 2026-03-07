@@ -12,13 +12,15 @@ The worst part: this only triggered when urltest *happened* to pick edgetunnel a
 
 ```json
 {
-  "tag": "cloudflare",
-  "address": "https://1.1.1.1/dns-query",
+  "tag": "google",
+  "address": "https://8.8.8.8/dns-query",
   "detour": "proxy"
 }
 ```
 
 DoH uses standard HTTPS, which works through *every* outbound type — VLESS, vmess, WebSocket, you name it.
+
+**Why Google, not Cloudflare**: Cloudflare DoH at `1.1.1.1` has TLS certificate issues when routed through the edgetunnel — `x509: cannot validate certificate for 1.1.1.1 because it doesn't contain any IP SANs`. This is a Cloudflare Workers internal routing quirk. Google DoH at `8.8.8.8` works reliably through all outbound types.
 
 **Critical**: The `detour: "proxy"` is essential. Without it, the DoH connection goes direct to `1.1.1.1:443`, which is blocked in China. I learned this the hard way when I accidentally stripped it during a config update — every device using that DNS server lost foreign DNS resolution.
 
@@ -116,11 +118,67 @@ Never take down the working proxy path before the new one is confirmed working.
 - Client **must** have `utls` enabled with a browser fingerprint
 - Use a separate port (e.g., 8443) alongside your existing proxy so you have a fallback during testing
 
+## `interrupt_exist_connections` Kills SSH Sessions
+
+**Problem**: With `interrupt_exist_connections: true` and low `tolerance` (e.g., 50ms), urltest frequently switches outbounds when latencies fluctuate. Each switch **kills all existing connections** — including long-running SSH sessions. I was seeing SSH drops every ~2 minutes on my iPhone.
+
+**Fix**: For devices where you run SSH sessions, either remove `interrupt_exist_connections` or increase tolerance significantly:
+
+```json
+{
+  "type": "urltest",
+  "tolerance": 200
+}
+```
+
+With `tolerance: 200`, urltest only switches when the latency difference exceeds 200ms — reducing unnecessary switches while still handling outbound failures. Without `interrupt_exist_connections`, existing connections stay on the old outbound and only new connections use the faster path.
+
+**Tradeoff**: `interrupt_exist_connections` is great for fast failover when an outbound dies, but bad for connection stability. Choose based on your priority — fast failover (laptop/phone browsing) vs. session stability (SSH).
+
+## iOS Hotspot Devices and sing-box
+
+**Problem**: Devices connected to iPhone's personal hotspot can't access blocked sites, even though sing-box is running on the iPhone. The SFI app's TUN only captures the iPhone's own traffic — **forwarded hotspot traffic bypasses the tunnel entirely**. iOS's `includeAllNetworks` VPN setting doesn't help either.
+
+**Fix**: Use sing-box's mixed proxy inbound instead of TUN for hotspot devices. The default config already includes a mixed inbound on port 7890. On each hotspot device:
+
+1. Wi-Fi settings → iPhone hotspot network → Configure IP: Manual
+2. Set IP, subnet, and router (iPhone's gateway IP)
+3. HTTP Proxy → Manual → Server: iPhone's gateway IP, Port: `7890`
+
+This routes the device's traffic directly to sing-box's proxy listener, bypassing the TUN limitation.
+
 ## `workers.dev` SNI Blocking
 
 Chinese ISPs block the `workers.dev` domain at the SNI level — the TLS Client Hello is RST'd during the handshake. This affects all Cloudflare Workers on the default domain.
 
 **Fix**: Set up a custom domain for your Worker (e.g., `edge.example.com`) through Cloudflare's Workers custom domains. Any domain on Cloudflare works — the SNI will show your custom domain instead of `workers.dev`.
+
+## Automatic Upgrades on Linux
+
+**Problem**: sing-box is installed from a third-party repo (`deb.sagernet.org`), which unattended-upgrades ignores by default. The package's postinst script also doesn't restart the service after upgrade.
+
+**Fix** (two parts):
+
+1. **Allow unattended-upgrades to update sing-box** — add the sagernet origin:
+
+   Ubuntu (`Allowed-Origins`):
+   ```
+   "sagernet_apt_fury_io:*";
+   ```
+
+   Debian (`Origins-Pattern`):
+   ```
+   "origin=sagernet_apt_fury_io";
+   ```
+
+2. **Auto-restart after upgrade** — add a dpkg hook:
+
+   ```bash
+   # /etc/apt/apt.conf.d/99sing-box-restart
+   DPkg::Post-Invoke {"if systemctl is-active --quiet sing-box; then systemctl restart sing-box; fi";};
+   ```
+
+Now sing-box upgrades and restarts are fully hands-off.
 
 ## Recommended Base Configuration
 
@@ -131,8 +189,8 @@ After all these lessons, here's the configuration pattern I've settled on:
   "dns": {
     "servers": [
       {
-        "tag": "cloudflare",
-        "address": "https://1.1.1.1/dns-query",
+        "tag": "google",
+        "address": "https://8.8.8.8/dns-query",
         "detour": "proxy"
       },
       {
@@ -151,14 +209,14 @@ After all these lessons, here's the configuration pattern I've settled on:
       { "outbound": "any", "server": "local" },
       { "rule_set": "geosite-cn", "server": "local" }
     ],
-    "final": "cloudflare",
+    "final": "google",
     "independent_cache": true
   }
 }
 ```
 
 **Why this works**:
-- Foreign domains → Cloudflare DoH **via proxy** (bypasses China DNS poisoning)
+- Foreign domains → Google DoH **via proxy** (bypasses China DNS poisoning)
 - Chinese domains → AliDNS DoH **direct** (fast, correct CDN routing)
 - Proxy server domains → local UDP DNS (breaks circular dependency)
 - `independent_cache` prevents cross-contamination between DNS servers

@@ -39,7 +39,7 @@ The sing-box iOS app supports importing JSON configs directly. Here's my working
   "log": { "level": "info", "timestamp": true },
   "dns": {
     "servers": [
-      { "tag": "cloudflare", "address": "https://1.1.1.1/dns-query", "detour": "proxy" },
+      { "tag": "google", "address": "https://8.8.8.8/dns-query", "detour": "proxy" },
       { "tag": "alidns", "address": "https://dns.alidns.com/dns-query", "address_resolver": "local", "detour": "direct" },
       { "tag": "local", "address": "119.29.29.29", "detour": "direct" }
     ],
@@ -47,7 +47,7 @@ The sing-box iOS app supports importing JSON configs directly. Here's my working
       { "outbound": "any", "server": "local" },
       { "rule_set": "geosite-cn", "server": "local" }
     ],
-    "final": "cloudflare",
+    "final": "google",
     "independent_cache": true
   },
   "inbounds": [
@@ -107,10 +107,10 @@ The sing-box iOS app supports importing JSON configs directly. Here's my working
 
 ### Key design decisions
 
-- **DNS**: Domestic domains → AliDNS DoH (direct). Everything else → Cloudflare DoH (via proxy). Must use DoH (`https://`), not raw TCP — raw TCP DNS breaks through WebSocket-based outbounds like Cloudflare Workers. The `detour: "proxy"` is critical — without it, DoH goes direct and gets blocked in China. `independent_cache` prevents cross-contamination.
+- **DNS**: Domestic domains → AliDNS DoH (direct). Everything else → Google DoH (via proxy). Must use DoH (`https://`), not raw TCP — raw TCP DNS breaks through WebSocket-based outbounds like Cloudflare Workers. Use Google (`8.8.8.8`) over Cloudflare (`1.1.1.1`) — Cloudflare DoH has TLS cert issues when routed through edgetunnel. The `detour: "proxy"` is critical — without it, DoH goes direct and gets blocked in China. `independent_cache` prevents cross-contamination.
 - **Routing**: GeoIP-CN and GeoSite-CN → direct. Private IPs → direct. Everything else → proxy via `urltest` auto-selection.
 - **Sniffing**: `sniff: true` + `sniff_override_destination: true` on the TUN inbound — this is critical for correct routing when DNS returns unexpected IPs.
-- **urltest**: `interrupt_exist_connections: true` immediately switches traffic when a better outbound is found. Without it, a dead outbound blocks all traffic until the next health check.
+- **urltest**: `interrupt_exist_connections: true` immediately switches traffic when a better outbound is found. Without it, a dead outbound blocks all traffic until the next health check. **Caveat**: this kills long-running connections (like SSH) on every switch — increase `tolerance` (e.g., 200) or remove it if you need stable sessions.
 
 > For more gotchas, see [sing-box Lessons Learned in China](sing-box-lessons-learned.md) — covers `strict_route` pitfalls, suspend/resume fixes, safe proxy migration, and more.
 
@@ -129,3 +129,4 @@ That's it. No subscription services, no complex UI — just a clean JSON config 
 - **On-Demand Rules** can be configured in iOS VPN settings to auto-connect on specific Wi-Fi networks
 - **Updates**: The sing-box app on the App Store stays reasonably up to date with the core project
 - **Multiple proxies**: Use `urltest` with multiple outbounds for automatic failover — if your primary VPS goes down, traffic switches to the backup seamlessly
+- **Hotspot devices**: SFI's TUN doesn't capture forwarded hotspot traffic. Instead, configure hotspot devices to use the iPhone as an HTTP proxy (gateway IP, port 7890) via the mixed inbound
