@@ -99,6 +99,28 @@ sudo systemctl enable sing-box-resume
 
 The 3-second delay lets the network interface come up before sing-box restarts.
 
+## Disable `systemd-resolved` on Linux
+
+**Problem**: `systemd-resolved` runs a stub DNS resolver at `127.0.0.53` and manages `/etc/resolv.conf` as a symlink. This conflicts with sing-box's DNS hijacking — DNS queries can loop through the stub resolver, cause timeouts (`communications error to 127.0.0.53#53: timed out`), or bypass sing-box's DNS rules entirely.
+
+**Fix**: Disable `systemd-resolved` and use static DNS:
+
+```bash
+sudo systemctl disable --now systemd-resolved
+sudo rm /etc/resolv.conf   # remove the symlink
+echo 'nameserver 119.29.29.29' | sudo tee /etc/resolv.conf
+sudo chattr +i /etc/resolv.conf   # prevent NetworkManager from overwriting
+```
+
+In `/etc/NetworkManager/NetworkManager.conf`, set:
+
+```ini
+[main]
+dns=default
+```
+
+**Why this works**: With sing-box running, all DNS is captured by the TUN and hijacked (`"protocol": "dns", "action": "hijack-dns"`), so the nameserver in `resolv.conf` doesn't matter — it's all routed through sing-box's DNS config. When sing-box is off, `119.29.29.29` (Tencent DNSPod) provides working domestic DNS. The `chattr +i` makes `resolv.conf` immutable so NetworkManager can't overwrite it on network changes.
+
 ## Proxy Changes Are High-Risk
 
 When your entire internet access depends on the proxy, a bad config change means you lose everything — internet, SSH, Claude Code, the ability to fix the problem remotely.
